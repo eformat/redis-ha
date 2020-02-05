@@ -20,7 +20,7 @@
 
 > As PV use the existing storage
 
-```shell
+```
     oc process -f templates/redis-master.yml \
         -p REDIS_SERVICE_PREFIX=${REDIS_PREFIX} \
         -p REDIS_IMAGE=redis-ha:latest \

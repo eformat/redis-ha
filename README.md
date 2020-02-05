@@ -6,6 +6,11 @@ It deploys a master with replicated slaves, as well as replicated redis sentinel
 
 ## Build configuration
 
+Create project
+```
+oc new-project redis-ha --description "Redis HA" --display-name="Redis HA"
+```
+
 1. Create image stream and build config
 
 ```
@@ -17,9 +22,9 @@ oc process -f openshift/build/redis-build.yml \
 
 2. Start the build
 
-    ```shell
-        oc start-build redis-ha-build
-    ```
+```
+oc start-build redis-ha-build
+```
 
 ## Deployment Configuration
 
@@ -30,6 +35,7 @@ Create a persistent storage, the storage must be **RWX**.
 ### Create a new persistent storage (RWX)
 
 ```yml
+cat <<EOF | oc apply -f -
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -40,54 +46,48 @@ spec:
   resources:
     requests:
       storage: 1Gi
-```
-```shell
-    oc create -f /tmp/storage.yml
+EOF
 ```
 
-### Turning up an initial master/sentinel pod
+### Bootstrap an initial master/sentinel pod
 
 Create a bootstrap master and sentinels with relative service
+```
+export REDIS_PREFIX=backend
+export REDIS_NAME=${REDIS_PREFIX}-redis
 
-```shell
-    export REDIS_PREFIX=backend
-    export REDIS_NAME=${REDIS_PREFIX}-redis
-    
-    oc process -f templates/redis-master.yml \
-        -p REDIS_SERVICE_PREFIX=${REDIS_PREFIX} \
-        -p REDIS_IMAGE=redis-ha:latest \
-        -p REDIS_PV=${REDIS_NAME}-storage \
-        | oc create -f -
+oc process -f openshift/templates/redis-master.yml \
+    -p REDIS_SERVICE_PREFIX=${REDIS_PREFIX} \
+    -p REDIS_IMAGE=redis-ha:latest \
+    -p REDIS_PV=${REDIS_NAME}-storage \
+    | oc create -f -
 ```
 
-### Turning up replicated redis slave servers
+### Create a replicated redis slave servers
 
 Create a deployment config for redis slave servers
-
-```shell
-    oc process -f templates/redis-slave.yml \
-        -p REDIS_SERVICE_PREFIX=${REDIS_PREFIX} \
-        -p REDIS_IMAGE=redis-ha:latest \
-        -p REDIS_PV=${REDIS_NAME}-storage \
-        | oc create -f -
+```
+oc process -f openshift/templates/redis-slave.yml \
+    -p REDIS_SERVICE_PREFIX=${REDIS_PREFIX} \
+    -p REDIS_IMAGE=redis-ha:latest \
+    -p REDIS_PV=${REDIS_NAME}-storage \
+    | oc create -f -
 ```
 
 Create a deployment config for redis sentinels
-
-
-```shell
-    oc process -f templates/redis-sentinel.yml \
-        -p REDIS_SERVICE_PREFIX=${REDIS_PREFIX} \
-        -p REDIS_IMAGE=redis-ha:latest \
-        | oc create -f -
+```
+oc process -f openshift/templates/redis-sentinel.yml \
+    -p REDIS_SERVICE_PREFIX=${REDIS_PREFIX} \
+    -p REDIS_IMAGE=redis-ha:latest \
+    | oc create -f -
 ```
 
 ### Scale down the bootstrap master
 
 Scale down the original master pod
 
-```shell
-    oc scale --replicas=0 dc ${REDIS_NAME}-master
+```
+oc scale --replicas=0 dc ${REDIS_NAME}-master
 ```
 
 ### Failover
@@ -96,6 +96,8 @@ Scale down the original master pod
 
 For a recommended setup that can resist more failures, set the replicas to 5 (default) for Redis and Sentinel.
 
+>
+> With 3 sentinels, a maximum of 1 can go down for a failover begin.
 >
 > With 5 or 6 sentinels, a maximum of 2 can go down for a failover begin.
 >

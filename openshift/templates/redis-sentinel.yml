@@ -10,7 +10,7 @@ objects:
       ${REDIS_SERVICE_PREFIX}-redis-sentinel: "true"
     name: ${REDIS_SERVICE_PREFIX}-redis-sentinel
   spec:
-    replicas: 5
+    replicas: 3
     selector:
       app: ${REDIS_SERVICE_PREFIX}-redis-sentinel
       ${REDIS_SERVICE_PREFIX}-redis-sentinel: "true"
