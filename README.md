@@ -8,12 +8,13 @@ It deploys a master with replicated slaves, as well as replicated redis sentinel
 
 1. Create image stream and build config
 
-    ```shell
-        oc process -f build/redis-build.yml \
-            -p REDIS_IMAGE_NAME=redis-ha \
-            -p GIT_REPO=https://github.com/openlab-red/redis-ha.git \
-            | oc create -f -
-    ```
+```
+oc process -f openshift/build/redis-build.yml \
+   -p REDIS_IMAGE_NAME=redis-ha \
+   -p GIT_REPO=https://github.com/eformat/redis-ha.git \
+   | oc create -f -
+```
+
 2. Start the build
 
     ```shell
