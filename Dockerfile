@@ -1,4 +1,4 @@
-FROM rhscl/redis-5-rhel7:latest
+FROM rhel8/redis-5:latest
 
 COPY redis-master.conf ${HOME}/redis-master/redis.conf
 COPY redis-slave.conf ${HOME}/redis-slave/redis.conf
