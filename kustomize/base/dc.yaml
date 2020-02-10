@@ -1,0 +1,247 @@
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  labels:
+    app: backend-redis
+  name: backend-redis
+spec:
+  replicas: 3
+  revisionHistoryLimit: 10
+  selector:
+    app: backend-redis
+  strategy:
+    activeDeadlineSeconds: 21600
+    resources: {}
+    rollingParams:
+      intervalSeconds: 1
+      maxSurge: 25%
+      maxUnavailable: 25%
+      timeoutSeconds: 600
+      updatePeriodSeconds: 1
+    type: Rolling
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: backend-redis
+    spec:
+      containers:
+      - env:
+        - name: REDIS_DATA_MAX_AGE
+          value: "4"
+        - name: REDIS_SENTINEL_SERVICE_HOST
+          value: backend-redis-sentinel
+        - name: REDIS_SENTINEL_SERVICE_PORT
+          value: "26379"
+        - name: REDIS_POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: REDIS_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        image: ''
+        imagePullPolicy: Always
+        name: backend-redis
+        ports:
+        - containerPort: 6379
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /var/lib/redis/data
+          name: data
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: backend-redis-storage
+  test: false
+  triggers:
+  - type: ConfigChange
+  - imageChangeParams:
+      automatic: true
+      containerNames:
+      - backend-redis
+      from:
+        kind: ImageStreamTag
+        name: redis-ha:latest
+        namespace: redis-ha
+      lastTriggeredImage: redis-ha/redis-ha:latest
+    type: ImageChange
+status: {}
+---
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  labels:
+    app: backend-redis-master
+    backend-redis-master: "true"
+    backend-redis-sentinel: "true"
+    role: master
+  name: backend-redis-master
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    app: backend-redis-master
+    backend-redis-master: "true"
+    backend-redis-sentinel: "true"
+    role: master
+  strategy:
+    activeDeadlineSeconds: 21600
+    resources: {}
+    rollingParams:
+      intervalSeconds: 1
+      maxSurge: 25%
+      maxUnavailable: 25%
+      timeoutSeconds: 600
+      updatePeriodSeconds: 1
+    type: Rolling
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: backend-redis-master
+        backend-redis-master: "true"
+        backend-redis-sentinel: "true"
+        role: master
+    spec:
+      containers:
+      - env:
+        - name: MASTER
+          value: "true"
+        - name: REDIS_DATA_MAX_AGE
+          value: "4"
+        image: ''
+        imagePullPolicy: Always
+        name: backend-redis
+        ports:
+        - containerPort: 6379
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /var/lib/redis/data
+          name: data
+      - env:
+        - name: SENTINEL
+          value: "true"
+        image: ''
+        imagePullPolicy: Always
+        name: backend-sentinel
+        ports:
+        - containerPort: 26379
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: backend-redis-storage
+  test: false
+  triggers:
+  - type: ConfigChange
+  - imageChangeParams:
+      automatic: true
+      containerNames:
+      - backend-redis
+      - backend-sentinel
+      from:
+        kind: ImageStreamTag
+        name: redis-ha:latest
+        namespace: redis-ha
+      lastTriggeredImage: redis-ha:latest
+    type: ImageChange
+status: {}
+---
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  labels:
+    app: backend-redis-sentinel
+    backend-redis-sentinel: "true"
+  name: backend-redis-sentinel
+spec:
+  replicas: 3
+  revisionHistoryLimit: 10
+  selector:
+    app: backend-redis-sentinel
+    backend-redis-sentinel: "true"
+  strategy:
+    activeDeadlineSeconds: 21600
+    resources: {}
+    rollingParams:
+      intervalSeconds: 1
+      maxSurge: 25%
+      maxUnavailable: 0
+      timeoutSeconds: 600
+      updatePeriodSeconds: 1
+    type: Rolling
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: backend-redis-sentinel
+        backend-redis-sentinel: "true"
+    spec:
+      containers:
+      - env:
+        - name: SENTINEL
+          value: "true"
+        - name: REDIS_SENTINEL_SERVICE_HOST
+          value: backend-redis-sentinel
+        - name: REDIS_SENTINEL_SERVICE_PORT
+          value: "26379"
+        - name: REDIS_DOWN_AFTER_MILLIS
+          value: "20000"
+        - name: REDIS_FAILOVER_TIMEOUT
+          value: "30000"
+        - name: REDIS_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        image: ''
+        imagePullPolicy: Always
+        name: backend-sentinel
+        ports:
+        - containerPort: 26379
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+  test: false
+  triggers:
+  - type: ConfigChange
+  - imageChangeParams:
+      automatic: true
+      containerNames:
+      - backend-sentinel
+      from:
+        kind: ImageStreamTag
+        name: redis-ha:latest
+        namespace: redis-ha
+      lastTriggeredImage: redis-ha:latest
+    type: ImageChange
+status: {}

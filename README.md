@@ -45,7 +45,7 @@ oc process -f openshift/build/redis-build.yml \
    | oc create -f -
 ```
 
-(Optional) If using authenticated registry
+(Optional) If using authenticated registry in your namespace
 ```
 oc create secret generic imagestreamsecret --from-literal=.dockerconfigjson=`oc get secret samples-registry-credentials -n openshift -o jsonpath="{.data['\.dockerconfigjson']}" |base64 -d` --type=kubernetes.io/dockerconfigjson
 oc secrets link default imagestreamsecret --for=pull
@@ -140,6 +140,37 @@ for x in $(oc get pods -l app=backend-redis -o name); do echo $x && oc exec ${x#
 
 # flush data from writable master
 oc exec pod/backend-redis-1-xs95h -- /usr/bin/redis-cli flushall
+```
+
+### Kustomize
+
+Build
+```
+oc import-image --all --confirm -n openshift registry.redhat.io/rhel8/redis-5
+oc -n openshift secrets link default samples-registry-credentials --for=pull
+oc -n openshift secrets link builder samples-registry-credentials
+oc process -n openshift -f openshift/build/redis-build.yml \
+   -p REDIS_BASE_IMAGE_NAME=redis-5:latest \
+   -p REDIS_IMAGE_NAME=redis-ha \
+   -p GIT_REPO=https://github.com/eformat/redis-ha.git \
+   | oc create -n openshift -f -
+oc start-build redis-ha-build -n openshift
+```
+
+Deploy
+```
+oc new-project redis-ha --description "Redis HA" --display-name="Redis HA"
+oc tag openshift/redis-ha:latest redis-ha:latest
+kustomize build ./kustomize/base | oc apply -f-
+# kustomize build ./kustomize/rwo | oc apply -f- # RWO pvc overlay for hacking
+```
+
+Scale bootstrap
+```
+# scale master bootstrap to zero (sentinel will vote for new master from slaves)
+oc scale dc/backend-redis-master --replicas=0
+# role
+for x in $(oc get pods -l app=backend-redis -o name); do echo $x && oc exec ${x##pod/} -- /usr/bin/redis-cli role; done
 ```
 
 ### Failover

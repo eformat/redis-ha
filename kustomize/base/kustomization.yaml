@@ -1,0 +1,5 @@
+resources:
+- pvc.yaml
+- is.yaml
+- svc.yaml
+- dc.yaml
