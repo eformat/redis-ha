@@ -1,8 +1,26 @@
 # Reliable, Scalable Redis on OpenShift
 
-The following document describes the deployment of a reliable, multi-node Redis on OpenShift. 
+The following document describes the deployment of a reliable, multi-node Redis on OpenShift.
 
-It deploys a master with replicated slaves, as well as replicated redis sentinels which are use for health checking and failover.
+## Redis Clustering
+
+- https://redis.io/topics/cluster-spec
+
+See `cluster-statefulset` directory.
+
+```
+oc apply -f ./cluster-statefulset
+```
+
+Redis Cluster provides a way to run a Redis installation where data is automatically sharded across multiple Redis nodes.
+
+## Redis Sentinel
+
+- https://redis.io/topics/sentinel
+
+Redis Sentinel provides high availability for Redis.
+
+The following documentation deploys a master with replicated slaves, as well as replicated redis sentinels which are use for health checking and failover.
 
 ## Build configuration
 
@@ -11,16 +29,30 @@ Create project
 oc new-project redis-ha --description "Redis HA" --display-name="Redis HA"
 ```
 
-1. Create image stream and build config
+1. (Optional) Use latest redis Image stream
+
+```
+oc import-image --all --confirm -n openshift registry.redhat.io/rhel8/redis-5
+```
+
+2. Create image stream and build config
 
 ```
 oc process -f openshift/build/redis-build.yml \
+   -p REDIS_BASE_IMAGE_NAME=redis-5:latest \
    -p REDIS_IMAGE_NAME=redis-ha \
    -p GIT_REPO=https://github.com/eformat/redis-ha.git \
    | oc create -f -
 ```
 
-2. Start the build
+(Optional) If using authenticated registry
+```
+oc create secret generic imagestreamsecret --from-literal=.dockerconfigjson=`oc get secret samples-registry-credentials -n openshift -o jsonpath="{.data['\.dockerconfigjson']}" |base64 -d` --type=kubernetes.io/dockerconfigjson
+oc secrets link default imagestreamsecret --for=pull
+oc secrets link builder imagestreamsecret
+```
+
+3. Start the build
 
 ```
 oc start-build redis-ha-build
@@ -88,6 +120,26 @@ Scale down the original master pod
 
 ```
 oc scale --replicas=0 dc ${REDIS_NAME}-master
+```
+
+### Test
+
+Sentinel
+```
+# role
+for x in $(oc get pods -l app=backend-redis -o name); do echo $x && oc exec ${x##pod/} -- /usr/bin/redis-cli role; done
+
+# scale master bootstrap to zero (sentinel will vote for new master from slaves)
+oc scale dc/backend-redis-master --replicas=0
+
+# write to master with some data
+oc exec pod/backend-redis-1-xs95h -- /usr/bin/redis-cli hmset employees e000001 'Carmina Chilcote' e000002 'Werner Whobrey' e000003 'Jenna Jarmon' e000004 'Norbert Niswonger' e000004 'Randell Reimers' e000005 'Janay Jacobi' e000006 'Tammara Theobald' e000007 'Margret Michelin' e000008 'Daron Desrosier' e000009 'Raymon Riggenbach'
+
+# read from master/slaves - for clustered redis - use `-c` here
+for x in $(oc get pods -l app=backend-redis -o name); do echo $x && oc exec ${x##pod/} -- /usr/bin/redis-cli hvals employees; echo; done
+
+# flush data from writable master
+oc exec pod/backend-redis-1-xs95h -- /usr/bin/redis-cli flushall
 ```
 
 ### Failover

@@ -34,12 +34,20 @@ objects:
       dockerStrategy:
         from:
           kind: ImageStreamTag
-          name: redis:latest
-          namespace: openshift
+          name: ${REDIS_BASE_IMAGE_NAME}
+          namespace: ${REDIS_BASE_IMAGE_PROJECT}
       type: Docker
     triggers: []
 
 parameters:
+- name: REDIS_BASE_IMAGE_PROJECT
+  description: Project where base image is.
+  required: true
+  value: "openshift"
+- name: REDIS_BASE_IMAGE_NAME
+  description: Name of the image to build from.
+  required: true
+  value: "redis:latest"
 - name: REDIS_IMAGE_NAME
   description: Name of the image to build.
   required: true
